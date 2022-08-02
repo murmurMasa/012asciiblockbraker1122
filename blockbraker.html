@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ブロック崩し</title>
+<script>
+var canvas, context;                            //キャンバス
+var timer;                                      //タイマー
+var playerX, playerY, ballX, ballY;             //プレイヤーとボールの位置
+var playerDir = 0;                              //プレイヤーの移動方向（-1←0→1）
+var playerSpeed = 2;                            //プレイヤーの速さ
+var ballSpeed = 1;                              //ボールの速さ
+var status = "ready";                           //ゲームステータス（ready/start/end)
+var blockX = new Array();                       //ブロックのX座標
+var blockY = new Array();                       //ブロックのY座標
+var blockStatus = new Array();                  //ブロックのステータス(alive/dead)
+var blockColor = ["magenta", "yellow", "lime"]; //ブロックの色
+var se = new Audio();                           //効果音
+
+function init() {
+    //キャンバスの取得
+    canvas = document.getElementById("game");       //ゲーム画面を表示するCanvasのID
+    context = canvas.getContext("2d");              //キャンバスの描画機能を有効にする
+    //効果音をセット
+    se.src = "se.mp3";                              //効果音のファイル名                           
+}
+
+function startGame() {
+    if (status == "ready") {
+        //Startボタン→Stopボタン
+        document.getElementById("start").value = "Stop";    //スタートボタンのID
+
+        //初期化
+        status = "start";
+        playerX = 300;
+        playerY = 460;
+        ballX = Math.random()*100;                          //0～99の乱数
+        ballY = 150;
+        ballDirX = 1;                                       //ボールが進む方向（初期値は右斜め下）
+        ballDirY = 1;
+        for (var i=0; i<30; i++) {
+            blockX[i] = (i%10)*60+20;
+            blockY[i] = Math.floor(i/10)*30+50;             //小数点以下切り捨て
+            blockStatus[i] = "alive";
+        }
+
+        //ゲームスタート
+        timer = setInterval(main, 10);
+    } else {
+        //ゲーム終了
+        status = "end";
+    }
+}
+
+function main() {
+    //キャンバスのクリア
+    context.clearRect(0, 0, canvas.width, canvas.height);           //Canvasの横幅、高さ
+
+    //ボールの移動
+    ballX += ballDirX*ballSpeed;                                    //例えばballDirX=1、ballDirY=-1なら右斜め上に移動　ballSpeedは1なので1ドットずつ進む
+    ballY += ballDirY*ballSpeed;
+
+    //ボールと壁の衝突（Y座標が480を超えるとゲーム終了）
+    if((ballX<0)||(ballX+10>640)) ballDirX *= -1;                   //ボールのX座標が0より小さいか630（640-10)より大きいならballDirXの符号を反転
+    if(ballY<0) ballDirY *= -1;                                     //ボールのY座標が0より小さいならballDirYの符号を反転　480より大きいならGAMEOVER
+    if(ballY>480) status = "end";
+
+    //ボールの描画
+    context.fillStyle = "white";                                    //ボールは白色で、10x10ドットの正方形
+    context.fillRect(ballX, ballY, 10, 10);
+
+    //プレイヤーの移動
+    playerX += playerDir*playerSpeed;                               //playerSpeedは2なので2ドットずつ進む
+    if(playerX<0) playerX = 0;                                      //画面の端に来たらそれ以上進まない
+    if(playerX+40>640) playerX = 640-40;
+
+    //プレイヤーの描画
+    context.fillStyle = "cyan";                                     //プレイヤーは水色で40x10ドットの長方形
+    context.fillRect(playerX, playerY, 40, 10);
+
+    //プレイヤーとボールの衝突
+    if((playerX<=ballX+10)&&(playerX+40>=ballX)&&(playerY<=ballY+10)&&(playerY+10>=ballY)) {  //かつで4つの条件がすべて真ならボールがプレイヤーに当たったとみなし｛　｝の中を実行
+        sePlay();           //効果音を鳴らす
+        ballDirY *= -1;     //ボールが上に跳ね返る
+    }
+
+    //ブロックの描画
+    var cnt = 0;
+    for (var i=0; i<blockStatus.length; i++) {              //ブロックの個数（=30個)
+        if (blockStatus[i] == "alive") {
+            //残りのブロック数をカウント
+            cnt++;
+
+            //ブロックの描画
+            context.fillStyle = blockColor[Math.floor(i/10)];       //ブロックは列ごとに、マゼンタ、黄色、黄緑色で、50x20ドットの長方形
+            context.fillRect(blockX[i], blockY[i], 50, 20);
+
+            //ブロックとボールの衝突
+            if ((blockX[i]<=ballX+10)&&(blockX[i]+50>=ballX)
+                &&(blockY[i]<=ballY+10)&&(blockY[i]+20>=ballY)) {    //4つの条件がすべて真なら、ボールのブロックに当たったとみなし｛　｝の中を実行
+                sePlay();
+                ballDirY *= -1;
+                blockStatus[i] = "dead";                             //ボールが当たったブロックのステータスを”dead”にする（次回から表示されない）
+            }
+        }
+    }
+
+    //ゲーム終了
+    if((status == "end")||(cnt == 0)) {
+        //GAME OVER/Congratulations!の描画
+        context.font = "24px `arial black`";                        //画面中央に赤色でGAMEOVERまたはCongratulations!と表示
+        context.fillStyle = "red";
+        context.textBaseline = "middle";
+        context.textAlign = "center";
+        var message = "GAME OVER";
+        if (cnt==0) message = "Congratulations!";
+        context.fillText(message, 320, 240);
+
+        //タイマーの停止
+        clearInterval(timer);
+        //Stopボタン→Startボタン、ゲーム状態をreadyへ変更
+        document.getElementById("start").value = "Start";
+        status = "ready";
+    }
+}
+
+document.onkeydown = function(e) {      //キーが押されたときに実行される　(e)イベントオブジェクトキーが押されたら自動的に設定される
+    if((e.key == "ArrowLeft")||(e.key == "Left")) {     //カーソル移動キーの左が押されたとき
+        //方向キー左（左へ移動）
+        playerDir = -1;
+    } else if ((e.key == "ArrowRight")||(e.key == "Right")) {   //カーソル移動キーの右が押されたとき
+        //方向キー右
+        playerDir = 1;
+    }
+}
+
+document.onkeyup = function(e) {                    //キーが放された時に実行される
+    //方向キーが放されたときは移動しない
+    if((e.key == "ArrowLeft")||(e.key == "Left")||
+       (e.key == "ArrowRight")||(e.key == "Right")) playerDir = 0;
+}
+
+function sePlay() {
+    //効果音を再生
+    se.currentTime = 0;                             //再生位置をいちばん初めにする
+    se.play();
+}
+</script>
+<style>
+#game {background-color: black;}
+input[type="button"] {width: 640px;}
+</style>
+</head>
+<body onload="init()">
+<p>ブロック崩し</p>
+<hr>
+<canvas id="game" width="640" height="480"></canvas>
+<br>
+<input type="button" id="start" value="Start" onclick="startGame()">
+</body>
+</html>
